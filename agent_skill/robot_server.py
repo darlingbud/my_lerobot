@@ -98,6 +98,33 @@ class RobotServer:
             print(f"Warning: Failed to read torque status: {e}")
             return self.torque_locked
 
+    # def _wait_for_goal(self, action, timeout=5.0):
+#     """Wait for robot to reach goal position using Moving flag.
+#
+#     Args:
+#         action: Dict of motor positions (e.g. {"shoulder_pan.pos": 1.23})
+#         timeout: Max seconds to wait
+#
+#     Returns:
+#         True if reached goal, False if timeout
+#     """
+#     import time
+#     start = time.time()
+#     motors = list(self.robot.bus.motors.keys())
+#
+#     while time.time() - start < timeout:
+#         try:
+#             moving = self.robot.bus.sync_read("Moving")
+#             all_stopped = all(moving.get(m, 0) == 0 for m in motors)
+#             if all_stopped:
+#                 return True
+#             time.sleep(0.01)
+#         except Exception as e:
+#             print(f"Warning: Error reading Moving: {e}")
+#             time.sleep(0.01)
+#
+#     return False
+
     def accept_loop(self):
         while self.running:
             try:
@@ -202,6 +229,8 @@ class RobotServer:
             elif command == "quit":
                 self.running = False
                 send_resp({"status": "ok", "message": "Server shutting down"})
+                import os
+                os._exit(0)
 
             else:
                 send_resp({"status": "error", "message": f"Unknown command: {command}"})

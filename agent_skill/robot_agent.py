@@ -108,21 +108,17 @@ class RobotAgent:
 
     def disconnect(self):
         """关闭机械臂: 退出 server"""
-        if self.client:
+        if self.is_server_online():
             try:
-                self.client.send("quit")
-                self.client.close()
+                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                sock.connect((self.host, self.port))
+                sock.sendall(b"quit\n")
+                sock.close()
+                print("Server stopped")
             except Exception:
                 pass
-            self.client = None
-
-        if not self.is_server_online():
+        else:
             print("Server not running")
-            return
-
-        time.sleep(1)
-        subprocess.run(["tmux", "kill-session", "-t", self.tmux_session], check=False)
-        print("Server stopped")
 
     def _get_client(self):
         """获取 client，复用连接"""
@@ -277,6 +273,10 @@ class RobotAgent:
             speed: 播放速度 (1.0=原始速度, >1=慢, <1=快)
             filename: 动作文件 (可选，默认 last_recorded.json)
         """
+        self.check_server()
+        if not self.is_server_online():
+            raise RuntimeError(f"Server not running on {self.host}:{self.port}")
+
         if filename:
             replay_file = filename
         else:
@@ -408,12 +408,11 @@ def main():
         print(agent.lock())
     elif args.go_safe_pos:
         print(agent.go_safe_pos())
-    elif args.recard is not None or args.recard_file:
-        frequency = args.recard if args.recard is not None else 10
-        agent.recard(frequency, args.recard_file)
     elif args.replay:
         speed = args.replay_speed if args.replay_speed > 0 else 1.0
         filename = args.replay_file
+        if not filename:
+            filename = args.recard_file
         if filename:
             if not filename.endswith(".json"):
                 filename += ".json"
@@ -421,6 +420,9 @@ def main():
         else:
             replay_file = None
         agent.replay(speed, replay_file)
+    elif args.recard is not None or args.recard_file:
+        frequency = args.recard if args.recard is not None else 10
+        agent.recard(frequency, args.recard_file)
     else:
         print("Robot Agent CLI")
         print("Usage:")

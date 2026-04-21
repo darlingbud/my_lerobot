@@ -220,6 +220,58 @@ def _interpolate_actions(actions, ratio):
 
 ---
 
+## 6. 命令响应流程 (同步阻塞模式)
+
+### 设计原则
+
+- **同步阻塞**: client 发送命令后等待 server 返回结果
+- **server 等待**: server 执行动作完成后才返回结果
+- **返回状态**: 成功返回 ok，失败返回 error + message
+
+### 流程
+
+```
+Client                              Server
+  |                                   |
+  |-- send "set key=value" --------->   |
+  |                                   |-- 执行动作
+  |                                   |   ├─ 发送目标位置到电机
+  |                                   |   ├─ 等待电机到达目标位置 (可选)
+  |                                   |   └─ 返回结果
+  |<-- response {status, ...} --------   |
+  |   (阻塞等待)                       |
+  |                                   |
+  print(response)                     |
+  client 退出                         |
+```
+
+### 返回值格式
+
+**成功**:
+```json
+{"status": "ok", "action": {"shoulder_pan.pos": 1.23, ...}}
+```
+
+**失败**:
+```json
+{"status": "error", "message": "Failed to write 'Torque_Enable' on id_=1"}
+```
+
+### 设计决策: 不阻塞等待
+
+与 lerobot 保持一致，server 收到命令后立即返回，不等待机器人移动完成。
+
+**理由**：
+- lerobot 本身设计为非阻塞（用于高频控制场景）
+- client 收到返回后即可执行其他操作
+- client 可以自行决定是否等待
+
+**可选实现**（已注释）：
+- `_wait_for_goal`: 通过 Moving 标志位或 Present_Position 判断是否到达目标
+- 如果需要阻塞等待，可以取消注释并调用此方法
+
+---
+
 ## 6. 文件结构
 
 ```
