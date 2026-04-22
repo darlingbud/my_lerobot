@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 """机器人客户端 - 发送指令给服务器."""
 
-import socket
 import json
+import socket
 import sys
 
 
@@ -59,9 +59,6 @@ class RobotClient:
 
 
 def main():
-    import os
-    import readline
-
     host = "127.0.0.1"
     port = 8765
 

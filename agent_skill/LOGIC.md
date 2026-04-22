@@ -19,24 +19,29 @@ RobotServer (robot_server.py) ←→ 机械臂 (Feetech舵机)
 ## 1. Server
 
 ### 职责
+
 - 持久运行，管理机械臂连接
 - 响应客户端命令
 - 检测机械臂连接状态
 
 ### 特性
+
 - **持久化**: server 启动后持续运行，直到显式关闭
 - **启动前提**: 必须有物理机械臂连接，如果连接失败则退出
 - **自动检测**: 每3秒检测机械臂连接，断开时自动关闭
 - **两个状态**: `connected`(物理连接) 和 `locked`(扭矩锁定)
 
 ### 关键实现
+
 - monitor_connection 使用 `robot.get_observation()` 而不是 `bus.read()`，因为 get_observation 是封装好的方法
 - handle_client 使用本地 socket 引用，避免多线程时 socket 被覆盖
 
 ### 启动命令
+
 ```bash
 python agent_skill/robot_agent.py --connect
 ```
+
 内部启动 tmux 后台 server，然后检测机械臂连接。
 
 ---
@@ -44,37 +49,41 @@ python agent_skill/robot_agent.py --connect
 ## 2. Client
 
 ### 职责
+
 - 发送命令给 server
 - 每次 CLI 调用创建新 client
 
 ### 特性
+
 - **连接检测**: 连接前检查 server 是否在线，使用 socket ping 检测
 - **非持久**: 每次命令后关闭，不能启动/关闭 server
 - **连接检查自动化**: 每次请求时检查 `connected` 状态，如果断开则自动关闭 server
 
 ### 与 Agent 生命周期同
+
 - 每次 CLI 调用创建 1 个 RobotAgent 实例
 - 每个 RobotAgent 实例创建 1 个 RobotClient 实例
 - 同一 RobotAgent 实例内的所有方法调用共享同一个 client
-- 如 `agent.free(); agent.recard(); agent.replay()` 共用 1 个 client
+- 如 `agent.free(); agent.record(); agent.replay()` 共用 1 个 client
 
 ---
 
-## 3. Recard (录制)
+## 3. record (录制)
 
 ### 使用
+
 ```bash
 # 默认录制
-python agent_skill/robot_agent.py --recard 10
+python agent_skill/robot_agent.py --record 10
 
 # 指定文件名
-python agent_skill/robot_agent.py --recard 10 --recard-file my_record
+python agent_skill/robot_agent.py --record 10 --record-file my_record
 
 # 指定文件名 (自动加.json)
-python agent_skill/robot_agent.py --recard 10 --recard-file my_record.json
+python agent_skill/robot_agent.py --record 10 --record-file my_record.json
 
 # 超时自动停止 (秒)
-python agent_skill/robot_agent.py --recard 10 --recard-timeout 5
+python agent_skill/robot_agent.py --record 10 --record-timeout 5
 ```
 
 ### 流程
@@ -82,7 +91,7 @@ python agent_skill/robot_agent.py --recard 10 --recard-timeout 5
 ```
 CLI
   ↓
-agent.recard(frequency, filename)
+agent.record(frequency, filename)
   ├─ 1. 检查状态
   │     ├─ connected: True/False
   │     └─ locked: True/False
@@ -105,7 +114,8 @@ agent.recard(frequency, filename)
 ```
 
 ### 关键实现
-- **主线程等待 Enter**: recard 方法内部等待 input()，不是 CLI 层处理
+
+- **主线程等待 Enter**: record 方法内部等待 input()，不是 CLI 层处理
 - **录制线程**: 用 socket 直接发送 "get"，不经过 RobotAgent 类的封装
 - **locked 提示**: 如果 locked，提示用户确认是否继续录制（位置不会变化但仍可录制）
 
@@ -143,6 +153,7 @@ def _record_loop(frequency):
 - 目录: `agent_skill/recordings/`
 - 默认: `last_recorded.json`
 - 结构:
+
 ```json
 {
   "frequency": 10,
@@ -163,6 +174,7 @@ def _record_loop(frequency):
 ## 4. Replay (重放)
 
 ### 使用
+
 ```bash
 # 默认1.0倍速
 python agent_skill/robot_agent.py --replay
@@ -207,16 +219,16 @@ def _interpolate_actions(actions, ratio):
 
 ## 5. Server 命令响应
 
-| 命令 | 说明 |
-|------|------|
-| `ping` | 返回 pong |
-| `status` | 返回 connected, locked |
-| `get` | 返回关节位置观察 |
-| `set key=value ...` | 设置关节目标位置 |
-| `home` | 所有关节回零位 |
-| `free` | 禁用扭矩 |
-| `lock` | 启用扭矩 |
-| `quit` | 退出 server |
+| 命令                | 说明                   |
+| ------------------- | ---------------------- |
+| `ping`              | 返回 pong              |
+| `status`            | 返回 connected, locked |
+| `get`               | 返回关节位置观察       |
+| `set key=value ...` | 设置关节目标位置       |
+| `home`              | 所有关节回零位         |
+| `free`              | 禁用扭矩               |
+| `lock`              | 启用扭矩               |
+| `quit`              | 退出 server            |
 
 ---
 
@@ -248,13 +260,15 @@ Client                              Server
 ### 返回值格式
 
 **成功**:
+
 ```json
 {"status": "ok", "action": {"shoulder_pan.pos": 1.23, ...}}
 ```
 
 **失败**:
+
 ```json
-{"status": "error", "message": "Failed to write 'Torque_Enable' on id_=1"}
+{ "status": "error", "message": "Failed to write 'Torque_Enable' on id_=1" }
 ```
 
 ### 设计决策: 不阻塞等待
@@ -262,11 +276,13 @@ Client                              Server
 与 lerobot 保持一致，server 收到命令后立即返回，不等待机器人移动完成。
 
 **理由**：
+
 - lerobot 本身设计为非阻塞（用于高频控制场景）
 - client 收到返回后即可执行其他操作
 - client 可以自行决定是否等待
 
 **可选实现**（已注释）：
+
 - `_wait_for_goal`: 通过 Moving 标志位或 Present_Position 判断是否到达目标
 - 如果需要阻塞等待，可以取消注释并调用此方法
 

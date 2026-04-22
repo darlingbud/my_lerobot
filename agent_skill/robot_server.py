@@ -1,15 +1,18 @@
 #!/usr/bin/env python
 """机器人服务器 - 持续连接，等待客户端指令."""
 
-import socket
 import json
+import socket
 import threading
 import time
+
 from lerobot.robots.so_follower import SO100Follower, SO100FollowerConfig
 
 
 class RobotServer:
-    def __init__(self, host="127.0.0.1", port=8765, port_name="/dev/ttyACM0", robot_id="my_awesome_follower_arm"):
+    def __init__(
+        self, host="127.0.0.1", port=8765, port_name="/dev/ttyACM0", robot_id="my_awesome_follower_arm"
+    ):
         self.host = host
         self.port = port
         self.port_name = port_name
@@ -34,6 +37,7 @@ class RobotServer:
 
         print("Connecting to robot...")
         import threading
+
         robot_thread = threading.Thread(target=self.connect_robot, daemon=True)
         robot_thread.start()
         robot_thread.join()
@@ -64,6 +68,7 @@ class RobotServer:
             raise
 
         import threading
+
         monitor_thread = threading.Thread(target=self.monitor_connection, daemon=True)
         monitor_thread.start()
 
@@ -99,31 +104,31 @@ class RobotServer:
             return self.torque_locked
 
     # def _wait_for_goal(self, action, timeout=5.0):
-#     """Wait for robot to reach goal position using Moving flag.
-#
-#     Args:
-#         action: Dict of motor positions (e.g. {"shoulder_pan.pos": 1.23})
-#         timeout: Max seconds to wait
-#
-#     Returns:
-#         True if reached goal, False if timeout
-#     """
-#     import time
-#     start = time.time()
-#     motors = list(self.robot.bus.motors.keys())
-#
-#     while time.time() - start < timeout:
-#         try:
-#             moving = self.robot.bus.sync_read("Moving")
-#             all_stopped = all(moving.get(m, 0) == 0 for m in motors)
-#             if all_stopped:
-#                 return True
-#             time.sleep(0.01)
-#         except Exception as e:
-#             print(f"Warning: Error reading Moving: {e}")
-#             time.sleep(0.01)
-#
-#     return False
+    #     """Wait for robot to reach goal position using Moving flag.
+    #
+    #     Args:
+    #         action: Dict of motor positions (e.g. {"shoulder_pan.pos": 1.23})
+    #         timeout: Max seconds to wait
+    #
+    #     Returns:
+    #         True if reached goal, False if timeout
+    #     """
+    #     import time
+    #     start = time.time()
+    #     motors = list(self.robot.bus.motors.keys())
+    #
+    #     while time.time() - start < timeout:
+    #         try:
+    #             moving = self.robot.bus.sync_read("Moving")
+    #             all_stopped = all(moving.get(m, 0) == 0 for m in motors)
+    #             if all_stopped:
+    #                 return True
+    #             time.sleep(0.01)
+    #         except Exception as e:
+    #             print(f"Warning: Error reading Moving: {e}")
+    #             time.sleep(0.01)
+    #
+    #     return False
 
     def accept_loop(self):
         while self.running:
@@ -230,6 +235,7 @@ class RobotServer:
                 self.running = False
                 send_resp({"status": "ok", "message": "Server shutting down"})
                 import os
+
                 os._exit(0)
 
             else:

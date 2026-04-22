@@ -1,6 +1,7 @@
 # Robot Agent Skill
 
 > 需要 conda 环境 `lerobot`
+>
 > ```bash
 > conda activate lerobot
 > ```
@@ -26,6 +27,11 @@ RobotServer (robot_server.py) ←→ 机械臂
 ## 快速开始
 
 ```bash
+# 0. 硬件测试 (测试机械臂和相机端口)
+python agent_skill/robot_agent.py --test
+python agent_skill/robot_agent.py --test-arm        # 测试机械臂端口
+python agent_skill/robot_agent.py --test-camera opencv   # 测试 opencv 相机
+
 # 1. 连接机械臂 (启动 server)
 python agent_skill/robot_agent.py --connect
 
@@ -33,7 +39,7 @@ python agent_skill/robot_agent.py --connect
 python agent_skill/robot_agent.py --free
 
 # 3. 录制动作
-python agent_skill/robot_agent.py --recard 10
+python agent_skill/robot_agent.py --record 10
 
 # 4. 重放动作
 python agent_skill/robot_agent.py --replay
@@ -41,31 +47,34 @@ python agent_skill/robot_agent.py --replay
 
 ## 常用命令
 
-| 命令 | 说明 |
-|------|------|
-| `--connect` | 连接机械臂 (启动 server) |
-| `--disconnect` | 断开连接 (停止 server) |
-| `--status` | 查看状态 |
-| `--get` | 获取关节位置 |
-| `--set "key=value ..."` | 设置关节位置 |
-| `--free` | 解锁扭矩 |
-| `--lock` | 锁定扭矩 |
-| `--home` | 回零位 |
-| `--safe-pos` | 移动到安全位置 |
-| `--recard [Hz]` | 录制动作 (默认10Hz) |
-| `--replay [x]` | 重放动作 (默认1.0倍速) |
+| 命令                    | 说明                         |
+| ----------------------- | ---------------------------- |
+| `--connect`             | 连接机械臂 (启动 server)     |
+| `--disconnect`          | 断开连接 (停止 server)       |
+| `--status`              | 查看状态                     |
+| `--get`                 | 获取关节位置                 |
+| `--set "key=value ..."` | 设置关节位置                 |
+| `--free`                | 解锁扭矩                     |
+| `--lock`                | 锁定扭矩                     |
+| `--home`                | 回零位                       |
+| `--safe-pos`            | 移动到安全位置               |
+| `--record [Hz]`         | 录制动作 (默认10Hz)          |
+| `--replay [x]`          | 重放动作 (默认1.0倍速)       |
+| `--test`                | 测试所有硬件 (机械臂 + 相机) |
+| `--test-arm`            | 测试机械臂端口               |
+| `--test-camera`         | 测试相机 (opencv/realsense)  |
 
-## 录制 (recard)
+## 录制 (record)
 
 ```bash
 # 默认录制，Enter停止
-python agent_skill/robot_agent.py --recard 10
+python agent_skill/robot_agent.py --record 10
 
 # 指定文件名 (自动加.json)
-python agent_skill/robot_agent.py --recard 10 --recard-file demo
+python agent_skill/robot_agent.py --record 10 --record-file demo
 
 # 超时自动停止 (秒)
-python agent_skill/robot_agent.py --recard 10 --recard-timeout 5
+python agent_skill/robot_agent.py --record 10 --record-timeout 5
 ```
 
 - locked 状态下会提示确认

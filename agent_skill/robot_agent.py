@@ -1,14 +1,13 @@
 #!/usr/bin/env python
 """Robot Agent Skill - client 非持久化，每次命令新建 client，server 手动启动/关闭."""
 
-import sys
+import json
 import os
-import time
 import socket
 import subprocess
-import json
+import sys
 import threading
-import select
+import time
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 RECORDINGS_DIR = os.path.join(SCRIPT_DIR, "recordings")
@@ -16,11 +15,13 @@ os.makedirs(RECORDINGS_DIR, exist_ok=True)
 
 sys.path.insert(0, SCRIPT_DIR)
 
-from robot_client import RobotClient
+from robot_client import RobotClient  # noqa: E402
 
 
 class RobotAgent:
-    def __init__(self, host="127.0.0.1", port=8765, port_name="/dev/ttyACM0", robot_id="my_awesome_follower_arm"):
+    def __init__(
+        self, host="127.0.0.1", port=8765, port_name="/dev/ttyACM0", robot_id="my_awesome_follower_arm"
+    ):
         self.host = host
         self.port = port
         self.port_name = port_name
@@ -75,8 +76,12 @@ class RobotAgent:
                 self.disconnect()
 
         cmd = [
-            "tmux", "new-session", "-d", "-s", self.tmux_session,
-            f"python {SCRIPT_DIR}/robot_server.py --port {self.port_name} --host {self.host} --port-num {self.port} --id {self.robot_id}"
+            "tmux",
+            "new-session",
+            "-d",
+            "-s",
+            self.tmux_session,
+            f"python {SCRIPT_DIR}/robot_server.py --port {self.port_name} --host {self.host} --port-num {self.port} --id {self.robot_id}",
         ]
 
         print(f"Starting server in tmux session '{self.tmux_session}'...")
@@ -93,7 +98,9 @@ class RobotAgent:
                     break
 
         self.disconnect()
-        raise RuntimeError("Failed to connect robot. Make sure the arm is connected and run lerobot-find-port to find the correct port.")
+        raise RuntimeError(
+            "Failed to connect robot. Make sure the arm is connected and run lerobot-find-port to find the correct port."
+        )
 
     def is_robot_connected(self):
         """检查机械臂是否连接"""
@@ -115,7 +122,7 @@ class RobotAgent:
                 sock.sendall(b"quit\n")
                 sock.close()
                 print("Server stopped")
-            except Exception:
+            except Exception:  # nosec: B110
                 pass
         else:
             print("Server not running")
@@ -197,7 +204,14 @@ class RobotAgent:
                 obs = json.loads(buffer.split("\n")[0])
                 state = obs.get("observation", {})
                 action = {"timestamp": time.time() - getattr(self, "_record_start_time", time.time())}
-                for joint in ["shoulder_pan", "shoulder_lift", "elbow_flex", "wrist_flex", "wrist_roll", "gripper"]:
+                for joint in [
+                    "shoulder_pan",
+                    "shoulder_lift",
+                    "elbow_flex",
+                    "wrist_flex",
+                    "wrist_roll",
+                    "gripper",
+                ]:
                     key = f"{joint}.pos"
                     if key in state:
                         action[key] = state[key]
@@ -210,7 +224,7 @@ class RobotAgent:
         if client:
             client.close()
 
-    def recard(self, frequency=10, filename=None):
+    def record(self, frequency=10, filename=None):
         """录制关节动作
 
         1. 检查状态
@@ -277,17 +291,14 @@ class RobotAgent:
         if not self.is_server_online():
             raise RuntimeError(f"Server not running on {self.host}:{self.port}")
 
-        if filename:
-            replay_file = filename
-        else:
-            replay_file = self._record_file
+        replay_file = filename or self._record_file
 
         if not os.path.exists(replay_file):
             raise FileNotFoundError(f"No recorded file found: {replay_file}")
 
         print(f"Replaying: {replay_file}")
 
-        with open(replay_file, "r") as f:
+        with open(replay_file) as f:
             data = json.load(f)
 
         recording_freq = data.get("frequency", 10)
@@ -302,7 +313,9 @@ class RobotAgent:
 
         interval = 1.0 / self._replay_freq
 
-        print(f"Replaying {len(interpolated)} actions (original {len(actions)}, record_freq={recording_freq}) at {speed}x speed (replay_freq={self._replay_freq}Hz)...")
+        print(
+            f"Replaying {len(interpolated)} actions (original {len(actions)}, record_freq={recording_freq}) at {speed}x speed (replay_freq={self._replay_freq}Hz)..."
+        )
 
         client = self._get_client()
         for action in interpolated:
@@ -327,7 +340,10 @@ class RobotAgent:
         if ratio == 1:
             return actions
 
-        joint_keys = [j + ".pos" for j in ["shoulder_pan", "shoulder_lift", "elbow_flex", "wrist_flex", "wrist_roll", "gripper"]]
+        joint_keys = [
+            j + ".pos"
+            for j in ["shoulder_pan", "shoulder_lift", "elbow_flex", "wrist_flex", "wrist_roll", "gripper"]
+        ]
 
         if ratio > 1:
             extra_steps = int(ratio)
@@ -355,10 +371,67 @@ class RobotAgent:
             result.append(actions[i])
         return result
 
+    def test_arm_port(self, port_name=None, verbose=True):
+        """测试机械臂端口是否存在"""
+        ports = ["/dev/ttyACM0", "/dev/ttyACM1"] if port_name is None else [port_name]
+
+        results = {}
+        for port in ports:
+            exists = os.path.exists(port)
+            try:
+                fd = os.open(port, os.O_RDONLY | os.O_NONBLOCK)
+                os.close(fd)
+                readable = True
+            except Exception:
+                readable = False
+
+            results[port] = {"exists": exists, "readable": readable}
+            if verbose:
+                status = "OK" if exists and readable else "FAIL"
+                print(f"[{status}] {port}: exists={exists}, readable={readable}")
+
+        return results
+
+    def test_camera(self, camera_type=None, verbose=True):
+        """测试相机端口
+
+        Args:
+            camera_type: "opencv" 或 "realsense" 或 None (测试所有)
+
+        Returns:
+            list: 检测到的相机信息
+        """
+        cmd = ["lerobot-find-cameras"]
+        if camera_type:
+            cmd.append(camera_type)
+
+        try:
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+            output = result.stdout
+        except subprocess.TimeoutExpired:
+            output = ""
+        except Exception as e:
+            output = f"Error: {e}"
+
+        cameras = []
+        for line in output.split("\n"):
+            if "Camera #" in line:
+                cameras.append(line.strip())
+
+        if verbose:
+            if cameras:
+                print(f"[OK] Found {len(cameras)} camera(s):")
+                for cam in cameras:
+                    print(f"  {cam}")
+            else:
+                print(f"[FAIL] No {camera_type or 'any'} cameras found")
+
+        return cameras
+
 
 def main():
     import argparse
-    
+
     parser = argparse.ArgumentParser(description="Robot Agent CLI")
     parser.add_argument("--connect", action="store_true", help="启动 server 并连接机械臂")
     parser.add_argument("--disconnect", action="store_true", help="退出 server")
@@ -371,16 +444,34 @@ def main():
     parser.add_argument("--lock", action="store_true", help="锁定扭矩")
     parser.add_argument("--status", action="store_true", help="查看状态")
     parser.add_argument("--go-safe-pos", action="store_true", help="移动到 safety pos")
-    parser.add_argument("--recard", nargs="?", const=10, type=int, default=None, help="录制频率 Hz (默认10)")
-    parser.add_argument("-f", "--recard-file", type=str, default=None, help="录制文件名")
-    parser.add_argument("-t", "--recard-timeout", type=int, default=0, help="录制超时(秒), 0等待Enter")
+    parser.add_argument("--record", nargs="?", const=10, type=int, default=None, help="录制频率 Hz (默认10)")
+    parser.add_argument("-f", "--record-file", type=str, default=None, help="录制文件名")
+    parser.add_argument("-t", "--record-timeout", type=int, default=0, help="录制超时(秒), 0等待Enter")
     parser.add_argument("--replay", action="store_true", help="重放动作")
     parser.add_argument("-r", "--replay-file", type=str, default=None, help="重放文件")
     parser.add_argument("-s", "--replay-speed", type=float, default=1.0, help="重放速度 (默认1.0)")
+    parser.add_argument(
+        "--test-arm",
+        nargs="?",
+        const="default",
+        type=str,
+        default=None,
+        help="测试机械臂端口: --test-arm 或 --test-arm /dev/ttyACM0",
+    )
+    parser.add_argument(
+        "--test-camera",
+        nargs="?",
+        const="default",
+        type=str,
+        default=None,
+        choices=["opencv", "realsense"],
+        help="测试相机: --test-camera 或 --test-camera opencv",
+    )
+    parser.add_argument("--test", action="store_true", help="测试所有硬件 (机械臂 + 相机)")
     args = parser.parse_args()
-    
+
     agent = RobotAgent()
-    
+
     if args.connect:
         agent.connect()
     elif args.disconnect:
@@ -412,7 +503,7 @@ def main():
         speed = args.replay_speed if args.replay_speed > 0 else 1.0
         filename = args.replay_file
         if not filename:
-            filename = args.recard_file
+            filename = args.record_file
         if filename:
             if not filename.endswith(".json"):
                 filename += ".json"
@@ -420,9 +511,26 @@ def main():
         else:
             replay_file = None
         agent.replay(speed, replay_file)
-    elif args.recard is not None or args.recard_file:
-        frequency = args.recard if args.recard is not None else 10
-        agent.recard(frequency, args.recard_file)
+    elif args.record is not None or args.record_file:
+        frequency = args.record if args.record is not None else 10
+        agent.record(frequency, args.record_file)
+    elif args.test:
+        print("=== 硬件测试 ===")
+        print("")
+        print("=== 机械臂端口测试 ===")
+        agent.test_arm_port(None)
+        print("")
+        print("=== 相机测试 ===")
+        agent.test_camera(None)
+    elif args.test_arm is not None or args.test_camera is not None:
+        arm_port = None if args.test_arm == "default" else args.test_arm
+        if args.test_arm is not None:
+            print("=== 机械臂端口测试 ===")
+            agent.test_arm_port(arm_port)
+        if args.test_camera is not None:
+            print("=== 相机测试 ===")
+            cam_type = None if args.test_camera == "default" else args.test_camera
+            agent.test_camera(cam_type)
     else:
         print("Robot Agent CLI")
         print("Usage:")
@@ -436,8 +544,11 @@ def main():
         print("  --safe-pos    # 移动到安全位置")
         print("  --free        # 解锁扭矩")
         print("  --lock        # 锁定扭矩")
-        print("  --recard [Hz]  # 录制动作")
+        print("  --record [Hz]  # 录制动作")
         print("  --replay [x]  # 重放动作")
+        print("  --test        # 测试所有硬件")
+        print("  --test-arm    # 测试机械臂端口 (/dev/ttyACM0, /dev/ttyACM1)")
+        print("  --test-camera # 测试相机 (opencv/realsense)")
 
 
 if __name__ == "__main__":
